@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OpusMC 生存辅助（彗星式客户端）
 // @namespace    https://github.com/bigpixel
-// @version      0.6.0
+// @version      0.6.1
 // @description  网页版 MC 运行时注入：RShift 呼出 Meteor 式 ClickGUI（多列模块 / 左键开关 / 列拖动 / 搜索）。ESP 生物方框（3D 线框）、追踪线、名字血条、物品与投射物 ESP、实体雷达、方位罗盘、夜视、时间与天气。适配 B 站 OpusMC / OpusCraft / 本地离线版。
 // @author       BigPixel
 // @match        https://opuscraft.pages.dev/*
@@ -67,7 +67,7 @@
     } catch (err) { console.warn('[OpusHUD] 来源伪装失败', err); }
   }
 
-  const VERSION = '0.6.0'; // 与头部 @version 同步改；显示在 HUD 标题和 GUI 底部，用户可核对更新
+  const VERSION = '0.6.1'; // 与头部 @version 同步改；显示在 HUD 标题和 GUI 底部，用户可核对更新
   const REF_POLL_MS = 800;
   const REF_POLL_MAX_TRIES = 375; // 最多找 5 分钟
   const SLOW_ROWS_MS = 250;
@@ -568,8 +568,9 @@
           for (let i = 0; i < 8; i++) {
             const pt = project(r, bb[i & 1 ? 3 : 0], bb[i & 2 ? 4 : 1], bb[i & 4 ? 5 : 2], W_, H_);
             if (!pt) { ok = false; break; }
-            // 爆炸坐标保护：角点远超画布（贴脸/极端透视）则整个框不画，防止棱线拉满屏
-            if (pt.x < -W_ * 3 || pt.x > W_ * 4 || pt.y < -H_ * 3 || pt.y > H_ * 4) { ok = false; break; }
+            // 爆炸坐标保护：角点超出画布 1.5 倍（贴脸/极端透视）则整个框不画，防止棱线拉满屏
+            const LIM_X = W_ * 1.5, LIM_Y = H_ * 1.5;
+            if (pt.x < -LIM_X || pt.x > W_ + LIM_X || pt.y < -LIM_Y || pt.y > H_ + LIM_Y) { ok = false; break; }
             pts.push(pt);
             if (pt.x < minX) minX = pt.x; if (pt.x > maxX) maxX = pt.x;
             if (pt.y < minY) minY = pt.y; if (pt.y > maxY) maxY = pt.y;
@@ -648,8 +649,11 @@
 
   // ---------- 实体雷达（俯视点位，玩家朝向为上） ----------
   function drawRadar() {
+    // radarSize 自愈钳制：localStorage 脏数据/异常值一律拉回 100~220，显示尺寸用 CSS 钉死
+    cfg.radarSize = Math.max(100, Math.min(220, cfg.radarSize | 0 || 140));
     const size = (radar.width !== cfg.radarSize || radar.height !== cfg.radarSize)
       ? (radar.width = radar.height = cfg.radarSize) : radar.width;
+    radar.style.width = radar.style.height = size + 'px';
     const c = rctx;
     c.clearRect(0, 0, size, size);
     if (!cfg.radar) return;
