@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OpusMC 生存辅助（彗星式客户端）
 // @namespace    https://github.com/bigpixel
-// @version      0.5.6
+// @version      0.6.0
 // @description  网页版 MC 运行时注入：RShift 呼出 Meteor 式 ClickGUI（多列模块 / 左键开关 / 列拖动 / 搜索）。ESP 生物方框（3D 线框）、追踪线、名字血条、物品与投射物 ESP、实体雷达、方位罗盘、夜视、时间与天气。适配 B 站 OpusMC / OpusCraft / 本地离线版。
 // @author       BigPixel
 // @match        https://opuscraft.pages.dev/*
@@ -12,6 +12,8 @@
 // @downloadURL  https://raw.githubusercontent.com/dawgnation1986/opusmc-mods/main/opusmc-hud.user.js
 // @run-at       document-start
 // @grant        unsafeWindow
+// @grant        GM_xmlhttpRequest
+// @connect      honghemc.cn
 // ==/UserScript==
 
 (function () {
@@ -20,7 +22,52 @@
   // Tampermonkey 沙箱里的 window 是代理，必须拿页面真身才能摸到游戏挂的全局对象
   const W = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
 
-  const VERSION = '0.5.5'; // 与头部 @version 同步改；显示在 HUD 标题和 GUI 底部，用户可核对更新
+  // ---------- 来源伪装：作者服务器（honghemc.cn）的账号/公告/房间 API 只认 B 站 Toy 域页面 ----------
+  // 本地部署版发过去的请求会被「不允许从这个网页访问」拒绝。把发往 honghemc.cn 的
+  // fetch 改走 GM_xmlhttpRequest（Tampermonkey 上下文，可带自定义头），
+  // Origin/Referer 伪装成 B 站 Toy 页面 —— 服务端若只校验来源即可放行；校验更深则不通。
+  function installOriginSpoof() {
+    try {
+      if (typeof GM_xmlhttpRequest !== 'function') {
+        console.warn('[OpusHUD] GM_xmlhttpRequest 不可用，来源伪装未启用');
+        return;
+      }
+      const origFetch = W.fetch ? W.fetch.bind(W) : null;
+      W.fetch = function (url, opts) {
+        const u = String(url);
+        if (u.indexOf('honghemc.cn') === -1) {
+          return origFetch ? origFetch(url, opts) : fetch(url, opts);
+        }
+        opts = opts || {};
+        return new Promise((resolve, reject) => {
+          GM_xmlhttpRequest({
+            method: opts.method || 'GET',
+            url: u,
+            data: opts.body,
+            headers: {
+              'Origin': 'https://www.bilibili.com',
+              'Referer': 'https://www.bilibili.com/',
+            },
+            timeout: 20000,
+            onload: (r) => {
+              // 模拟 Response 最小接口（account.js 只用 ok/status/text()）
+              resolve({
+                ok: r.status >= 200 && r.status < 300,
+                status: r.status,
+                text: () => Promise.resolve(r.responseText),
+                json: () => Promise.resolve(JSON.parse(r.responseText)),
+              });
+            },
+            onerror: () => reject(new TypeError('fetch failed')),
+            ontimeout: () => reject(new TypeError('timeout')),
+          });
+        });
+      };
+      console.log('[OpusHUD] 来源伪装已启用：honghemc.cn 请求伪装为 B 站 Toy 页面身份');
+    } catch (err) { console.warn('[OpusHUD] 来源伪装失败', err); }
+  }
+
+  const VERSION = '0.6.0'; // 与头部 @version 同步改；显示在 HUD 标题和 GUI 底部，用户可核对更新
   const REF_POLL_MS = 800;
   const REF_POLL_MAX_TRIES = 375; // 最多找 5 分钟
   const SLOW_ROWS_MS = 250;
@@ -1019,6 +1066,7 @@
       return;
     }
     installFillTextSniffer();
+    installOriginSpoof();
     hookNightVision();
     applyGate();
     applyServer();
