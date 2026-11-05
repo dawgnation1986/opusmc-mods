@@ -37,6 +37,9 @@
     labels: true,       // 名字与血条
     itemEsp: false,     // 物品与投射物 ESP
     radar: false,       // 实体雷达
+    radarSize: 140,     // 雷达直径（像素）
+    mcAddr: 'ws://localhost:25565',  // MC1.8 服务器地址（PHPMC）
+    mcName: 'WebPlayer',             // MC 服务器里的玩家名
     compass: false,     // 方位罗盘
     nightVision: false, // 夜视（游戏原生渲染路径）
     timeWeather: false, // 时间与天气
@@ -597,7 +600,9 @@
 
   // ---------- 实体雷达（俯视点位，玩家朝向为上） ----------
   function drawRadar() {
-    const size = radar.width, c = rctx;
+    const size = (radar.width !== cfg.radarSize || radar.height !== cfg.radarSize)
+      ? (radar.width = radar.height = cfg.radarSize) : radar.width;
+    const c = rctx;
     c.clearRect(0, 0, size, size);
     if (!cfg.radar) return;
     const g = state.game, p = state.player;
@@ -782,7 +787,26 @@
     minus.addEventListener('click', () => clampSet(cfg.espDist - 8));
     plus.addEventListener('click', () => clampSet(cfg.espDist + 8));
     st.append(lab, minus, val, plus);
-    foot.append(st);
+    // 雷达大小 stepper
+    const st2 = document.createElement('div');
+    st2.className = 'op-stepper';
+    const rl = document.createElement('span');
+    rl.className = 'op-steplabel';
+    rl.textContent = '雷达';
+    const rminus = document.createElement('span');
+    rminus.className = 'op-step-btn';
+    rminus.textContent = '−';
+    const rval = document.createElement('span');
+    rval.className = 'op-step-val';
+    rval.textContent = cfg.radarSize;
+    const rplus = document.createElement('span');
+    rplus.className = 'op-step-btn';
+    rplus.textContent = '＋';
+    const rset = (v) => { cfg.radarSize = Math.max(100, Math.min(220, v)); rval.textContent = cfg.radarSize; saveCfg(); };
+    rminus.addEventListener('click', () => rset(cfg.radarSize - 20));
+    rplus.addEventListener('click', () => rset(cfg.radarSize + 20));
+    st2.append(rl, rminus, rval, rplus);
+    foot.append(st, st2);
     cRender.append(foot);
 
     // 信息列
@@ -814,6 +838,49 @@
     refreshS();
     sfoot.append(srow);
     cInfo.append(sfoot);
+    // MC1.8 直连（PHPMC）：地址/玩家名/连接按钮/状态 —— 依赖 opus-mc18-link 内核脚本
+    const mfoot = document.createElement('div');
+    mfoot.className = 'op-col-foot';
+    const mAddr = document.createElement('input');
+    mAddr.className = 'op-search';
+    mAddr.value = cfg.mcAddr || 'ws://localhost:25565';
+    mAddr.placeholder = 'ws://IP:25565';
+    mAddr.addEventListener('change', () => { cfg.mcAddr = mAddr.value.trim() || cfg.mcAddr; saveCfg(); });
+    const mName = document.createElement('input');
+    mName.className = 'op-search';
+    mName.value = cfg.mcName || 'WebPlayer';
+    mName.placeholder = '玩家名';
+    mName.addEventListener('change', () => { cfg.mcName = mName.value.trim() || 'WebPlayer'; saveCfg(); });
+    const mBtn = document.createElement('div');
+    mBtn.className = 'op-mod';
+    mBtn.textContent = '连接 / 断开';
+    const mStat = document.createElement('div');
+    mStat.className = 'op-steplabel';
+    const refreshM = () => {
+      try {
+        const M = W.__mc18;
+        if (!M) { mStat.textContent = '状态: 请先安装 opus-mc18-link'; return; }
+        const st = M.status().state;
+        mStat.textContent = '状态: ' + ({ idle: '未连接', connecting: '连接中', login: '登录中', play: '已连接', closed: '已断开' }[st] || st);
+      } catch (err) { /* noop */ }
+    };
+    mBtn.addEventListener('click', () => {
+      const M = W.__mc18;
+      if (!M) { mStat.textContent = '请先安装 opus-mc18-link 脚本'; return; }
+      const st = M.status().state;
+      if (st === 'play' || st === 'connecting' || st === 'login') { M.disconnect(); }
+      else {
+        cfg.mcAddr = mAddr.value.trim() || cfg.mcAddr;
+        cfg.mcName = mName.value.trim() || 'WebPlayer';
+        saveCfg();
+        M.connect(cfg.mcAddr, cfg.mcName);
+      }
+      setTimeout(refreshM, 400);
+    });
+    mStat.textContent = '状态: -';
+    setInterval(() => { if (guiOpen()) refreshM(); }, 2000);
+    mfoot.append(mAddr, mName, mBtn, mStat);
+    cInfo.append(mfoot);
 
     // 搜索列
     const cSearch = makeCol('Search', 356, 64, 'green');
