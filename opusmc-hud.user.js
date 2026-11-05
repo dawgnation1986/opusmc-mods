@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OpusMC 生存辅助（彗星式客户端）
 // @namespace    https://github.com/bigpixel
-// @version      0.5.5
+// @version      0.5.6
 // @description  网页版 MC 运行时注入：RShift 呼出 Meteor 式 ClickGUI（多列模块 / 左键开关 / 列拖动 / 搜索）。ESP 生物方框（3D 线框）、追踪线、名字血条、物品与投射物 ESP、实体雷达、方位罗盘、夜视、时间与天气。适配 B 站 OpusMC / OpusCraft / 本地离线版。
 // @author       BigPixel
 // @match        https://opuscraft.pages.dev/*
@@ -43,6 +43,7 @@
     compass: false,     // 方位罗盘
     nightVision: false, // 夜视（游戏原生渲染路径）
     timeWeather: false, // 时间与天气
+    bypassGate: false,  // 多人免登录入口（跳过客户端登录/关注检查）
     espDist: 64,        // ESP 最大距离（格）
     servers: [{ name: '官方', url: 'https://xz.honghemc.cn:8443' }], // 房间服务器列表
     serverIdx: 0,       // 当前使用的服务器
@@ -704,6 +705,7 @@
     { col: 'render', key: 'nightVision', label: '夜视' },
     { col: 'info', key: 'hud', label: '坐标 HUD' },
     { col: 'info', key: 'timeWeather', label: '时间与天气' },
+    { col: 'info', key: 'bypassGate', label: '多人免登录', on: () => applyGate() },
   ];
 
   // ---------- ClickGUI（RShift 呼出，Meteor 式） ----------
@@ -753,6 +755,7 @@
         saveCfg();
         syncSwitches();
         if (m.key === 'hud' && cfg.hud) startHud();
+        if (m.onChange) m.onChange(cfg[m.key]);
       });
       col.append(row);
       m.row = row;
@@ -959,6 +962,24 @@
     };
   }
 
+  // ---------- 多人免登录入口：替换全局 onlineGate，直接放行进多人界面 ----------
+  // 只跳过客户端 UI 门槛（登录屏/关注解锁屏）；服务端真实权限不受影响——
+  // 加入房间时服务端该拒的还是会拒，届时只能走关注解锁的正道。
+  function applyGate() {
+    try {
+      if (typeof W.onlineGate !== 'function') return;
+      if (cfg.bypassGate && !W.__opusOrigGate) {
+        W.__opusOrigGate = W.onlineGate;
+        W.onlineGate = function (g, then, parent) { return then(); };
+        console.log('[OpusHUD] 多人免登录入口已开启（客户端门槛跳过，服务端权限不变）');
+      } else if (!cfg.bypassGate && W.__opusOrigGate) {
+        W.onlineGate = W.__opusOrigGate;
+        W.__opusOrigGate = null;
+        console.log('[OpusHUD] 多人免登录入口已关闭，恢复正常门槛');
+      }
+    } catch (err) { /* noop */ }
+  }
+
   // ---------- 渲染循环挂钩：渲染完立即画 ESP，消除独立 rAF 的一帧滞后 ----------
   let hookedOrig = null, hookedProto = null;
   function hookRender() {
@@ -999,6 +1020,7 @@
     }
     installFillTextSniffer();
     hookNightVision();
+    applyGate();
     applyServer();
     document.head.appendChild(styleEl);
     document.documentElement.append(hud, timeRow, espCanvas, radar, compass, menu);
