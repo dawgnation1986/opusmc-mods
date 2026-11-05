@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OpusMC 生存辅助（彗星式客户端）
 // @namespace    https://github.com/bigpixel
-// @version      0.5.4
+// @version      0.5.5
 // @description  网页版 MC 运行时注入：RShift 呼出 Meteor 式 ClickGUI（多列模块 / 左键开关 / 列拖动 / 搜索）。ESP 生物方框（3D 线框）、追踪线、名字血条、物品与投射物 ESP、实体雷达、方位罗盘、夜视、时间与天气。适配 B 站 OpusMC / OpusCraft / 本地离线版。
 // @author       BigPixel
 // @match        https://opuscraft.pages.dev/*
@@ -20,6 +20,7 @@
   // Tampermonkey 沙箱里的 window 是代理，必须拿页面真身才能摸到游戏挂的全局对象
   const W = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
 
+  const VERSION = '0.5.5'; // 与头部 @version 同步改；显示在 HUD 标题和 GUI 底部，用户可核对更新
   const REF_POLL_MS = 800;
   const REF_POLL_MAX_TRIES = 375; // 最多找 5 分钟
   const SLOW_ROWS_MS = 250;
@@ -314,7 +315,7 @@
   hud.id = '__opus_hud';
   const titleRow = document.createElement('div');
   titleRow.className = 'op-title';
-  titleRow.textContent = 'OpusHUD · RShift 开菜单';
+  titleRow.textContent = 'OpusHUD v' + VERSION + ' · RShift 开菜单';
   const bodyRow = document.createElement('div');
   hud.append(titleRow, bodyRow);
 
@@ -831,7 +832,7 @@
     // 底部提示
     const footTip = document.createElement('div');
     footTip.className = 'op-gui-foot';
-    footTip.textContent = '左键 切换模块 · 拖列头 移动 · RShift 关闭';
+    footTip.textContent = 'v' + VERSION + ' · 左键 切换模块 · 拖列头 移动 · RShift 关闭 · 仅建议单人';
     menu.append(footTip);
 
     menuSwitches = MODS.map(m => ({ key: m.key, el: m.row }));
@@ -948,7 +949,7 @@
       state.game = found.game;
       state.player = found.player;
       state.flavor = found.key;
-      titleRow.textContent = `OpusHUD · 已接入（${found.key}）· RShift 开菜单`;
+      titleRow.textContent = `OpusHUD v${VERSION} · 已接入（${found.key}）· RShift 开菜单`;
       console.log('[OpusHUD] 引用接入成功:', found.key, { game: found.game, player: found.player });
       // GUI 开着时拦下游戏的指针锁定（点 GUI / 点空白都不再锁视角）
       try {
@@ -977,7 +978,7 @@
       } else {
         return '这个对象不像 game/player（没找到坐标字段）';
       }
-      titleRow.textContent = 'OpusHUD · 手动接入成功 · RShift 开菜单';
+      titleRow.textContent = `OpusHUD v${VERSION} · 手动接入成功 · RShift 开菜单`;
       if (!hookRender()) requestAnimationFrame(espFrame);
       return 'OK';
     },
